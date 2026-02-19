@@ -10,11 +10,23 @@
       "value": "b"
     },
     {
+      "definition_index": 0,
       "type": "instance",
       "value": {
         "index": 0,
         "_name": 1
       }
+    }
+  ],
+  "definitions": [
+    {
+      "path": [
+        {
+          "kind": "method",
+          "name": "doSomething"
+        }
+      ],
+      "uri": "package:record_use_test/enum_const_arg.dart"
     }
   ],
   "metadata": {
@@ -32,15 +44,7 @@
           "type": "with_arguments"
         }
       ],
-      "definition": {
-        "path": [
-          {
-            "kind": "method",
-            "name": "doSomething"
-          }
-        ],
-        "uri": "package:record_use_test/enum_const_arg.dart"
-      }
+      "definition_index": 0
     }
   ]
 }

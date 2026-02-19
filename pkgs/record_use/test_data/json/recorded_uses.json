@@ -30,6 +30,7 @@
       "value": 42
     },
     {
+      "definition_index": 1,
       "type": "instance",
       "value": {
         "i": 5
@@ -44,6 +45,33 @@
     {
       "message": "Record",
       "type": "unsupported"
+    }
+  ],
+  "definitions": [
+    {
+      "path": [
+        {
+          "kind": "class",
+          "name": "OtherClass"
+        },
+        {
+          "disambiguators": [
+            "static"
+          ],
+          "kind": "method",
+          "name": "generate"
+        }
+      ],
+      "uri": "package:record_use_test/complex.dart"
+    },
+    {
+      "path": [
+        {
+          "kind": "class",
+          "name": "MyClass"
+        }
+      ],
+      "uri": "package:record_use_test/instance_class.dart"
     }
   ],
   "metadata": {
@@ -74,33 +102,10 @@
           "type": "with_arguments"
         }
       ],
-      "definition": {
-        "path": [
-          {
-            "kind": "class",
-            "name": "OtherClass"
-          },
-          {
-            "disambiguators": [
-              "static"
-            ],
-            "kind": "method",
-            "name": "generate"
-          }
-        ],
-        "uri": "package:record_use_test/complex.dart"
-      }
+      "definition_index": 0
     },
     {
-      "definition": {
-        "path": [
-          {
-            "kind": "class",
-            "name": "MyClass"
-          }
-        ],
-        "uri": "package:record_use_test/instance_class.dart"
-      },
+      "definition_index": 1,
       "instances": [
         {
           "constant_index": 6,

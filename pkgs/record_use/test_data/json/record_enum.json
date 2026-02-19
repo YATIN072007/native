@@ -10,6 +10,7 @@
       "value": "a"
     },
     {
+      "definition_index": 0,
       "type": "instance",
       "value": {
         "index": 0,
@@ -17,10 +18,22 @@
       }
     },
     {
+      "definition_index": 0,
       "type": "instance",
       "value": {
         "a": 2
       }
+    }
+  ],
+  "definitions": [
+    {
+      "path": [
+        {
+          "kind": "class",
+          "name": "MyClass"
+        }
+      ],
+      "uri": "package:record_use_test/record_enum.dart"
     }
   ],
   "metadata": {
@@ -29,15 +42,7 @@
   },
   "recordings": [
     {
-      "definition": {
-        "path": [
-          {
-            "kind": "class",
-            "name": "MyClass"
-          }
-        ],
-        "uri": "package:record_use_test/record_enum.dart"
-      },
+      "definition_index": 0,
       "instances": [
         {
           "constant_index": 3,

@@ -6,6 +6,7 @@
       "value": 42
     },
     {
+      "definition_index": 0,
       "type": "instance",
       "value": {
         "i": 0
@@ -16,10 +17,22 @@
       "value": 43
     },
     {
+      "definition_index": 0,
       "type": "instance",
       "value": {
         "i": 2
       }
+    }
+  ],
+  "definitions": [
+    {
+      "path": [
+        {
+          "kind": "class",
+          "name": "MyClass"
+        }
+      ],
+      "uri": "package:record_use_test/instance_duplicates.dart"
     }
   ],
   "metadata": {
@@ -28,15 +41,7 @@
   },
   "recordings": [
     {
-      "definition": {
-        "path": [
-          {
-            "kind": "class",
-            "name": "MyClass"
-          }
-        ],
-        "uri": "package:record_use_test/instance_duplicates.dart"
-      },
+      "definition_index": 0,
       "instances": [
         {
           "constant_index": 1,
