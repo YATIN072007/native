@@ -10,6 +10,7 @@ import 'package:meta/meta.dart';
 import 'constant.dart';
 import 'definition.dart';
 import 'helper.dart';
+import 'loading_unit.dart';
 import 'metadata.dart';
 import 'reference.dart';
 import 'serialization_context.dart';
@@ -66,15 +67,21 @@ Error: $e
   }
 
   factory Recordings._fromSyntax(RecordedUsesSyntax syntax) {
-    final definitionContext = _deserializeDefinitions(syntax);
+    final loadingUnitContext = _deserializeLoadingUnits(syntax);
+    final definitionContext = _deserializeDefinitions(
+      syntax,
+      loadingUnitContext,
+    );
     final context = _deserializeConstants(syntax, definitionContext);
 
     final callsForDefinition = <Definition, List<CallReference>>{};
     final instancesForDefinition = <Definition, List<InstanceReference>>{};
 
-    for (final recordingSyntax in syntax.recordings ?? <RecordingSyntax>[]) {
-      final definition = context.definitions[recordingSyntax.definitionIndex];
-      if (recordingSyntax.calls case final callSyntaxes?) {
+    final uses = syntax.uses;
+    if (uses != null) {
+      for (final callRecording in uses.staticCalls ?? <CallRecordingSyntax>[]) {
+        final definition = context.definitions[callRecording.definitionIndex];
+        final callSyntaxes = callRecording.uses;
         final callReferences = callSyntaxes
             .map<CallReference>(
               (callSyntax) => CallReferenceProtected.fromSyntax(
@@ -87,7 +94,11 @@ Error: $e
             .putIfAbsent(definition, () => [])
             .addAll(callReferences);
       }
-      if (recordingSyntax.instances case final instanceSyntaxes?) {
+      for (final instanceRecording
+          in uses.instances ?? <InstanceRecordingSyntax>[]) {
+        final definition =
+            context.definitions[instanceRecording.definitionIndex];
+        final instanceSyntaxes = instanceRecording.uses;
         final instanceReferences = instanceSyntaxes
             .map<InstanceReference>(
               (instanceSyntax) => InstanceReferenceProtected.fromSyntax(
@@ -109,21 +120,35 @@ Error: $e
     );
   }
 
+  static LoadingUnitDeserializationContext _deserializeLoadingUnits(
+    RecordedUsesSyntax syntax,
+  ) {
+    final loadingUnits = <LoadingUnit>[];
+    for (final unit in syntax.loadingUnits ?? <LoadingUnitSyntax>[]) {
+      loadingUnits.add(LoadingUnit(unit.name));
+    }
+    return LoadingUnitDeserializationContext(loadingUnits);
+  }
+
   static DefinitionDeserializationContext _deserializeDefinitions(
     RecordedUsesSyntax syntax,
+    LoadingUnitDeserializationContext loadingUnitContext,
   ) {
     final definitions = <Definition>[];
     for (final definitionSyntax in syntax.definitions ?? <DefinitionSyntax>[]) {
       definitions.add(DefinitionProtected.fromSyntax(definitionSyntax));
     }
-    return DefinitionDeserializationContext(definitions);
+    return DefinitionDeserializationContext.fromPrevious(
+      loadingUnitContext,
+      definitions,
+    );
   }
 
   static DeserializationContext _deserializeConstants(
     RecordedUsesSyntax syntax,
     DefinitionDeserializationContext definitionContext,
   ) {
-    final constants = <Constant>[];
+    final constants = <MaybeConstant>[];
     // Create a context that includes an empty list for the constants. This
     // list will be populated by [_deserializeConstants], providing the
     // self-referential access needed to resolve recursive constants (e.g.
@@ -133,7 +158,10 @@ Error: $e
       constants,
     );
     for (final constantSyntax in syntax.constants ?? <ConstantSyntax>[]) {
-      final constant = ConstantProtected.fromSyntax(constantSyntax, context);
+      final constant = MaybeConstantProtected.fromSyntax(
+        constantSyntax,
+        context,
+      );
       if (!constants.contains(constant)) {
         constants.add(constant);
       }
@@ -148,32 +176,59 @@ Error: $e
 
   RecordedUsesSyntax _toSyntax() {
     final allConstants = _collectConstants();
-    final definitionContext = _serializeDefinitions(allConstants);
+    final allLoadingUnits = _collectLoadingUnits();
+    final loadingUnitContext = _serializeLoadingUnits(allLoadingUnits);
+    final definitionContext = _serializeDefinitions(
+      allConstants,
+      loadingUnitContext,
+    );
     final (context, constantSyntax) = _serializeConstants(
       allConstants,
       definitionContext,
     );
 
-    final recordings = <RecordingSyntax>[];
+    final callRecordings = <CallRecordingSyntax>[];
+    final instanceRecordings = <InstanceRecordingSyntax>[];
     for (final definition in context.definitions.keys) {
       final callsForDefinition = calls[definition];
+      if (callsForDefinition != null && callsForDefinition.isNotEmpty) {
+        callRecordings.add(
+          CallRecordingSyntax(
+            definitionIndex: context.definitions[definition]!,
+            uses: callsForDefinition
+                .map((call) => call.toSyntax(context))
+                .toList(),
+          ),
+        );
+      }
       final instancesForDefinition = instances[definition];
-      recordings.add(
-        RecordingSyntax(
-          definitionIndex: context.definitions[definition]!,
-          calls: callsForDefinition
-              ?.map((call) => call.toSyntax(context))
-              .toList(),
-          instances: instancesForDefinition
-              ?.map((instance) => instance.toSyntax(context))
-              .toList(),
-        ),
-      );
+      if (instancesForDefinition != null && instancesForDefinition.isNotEmpty) {
+        instanceRecordings.add(
+          InstanceRecordingSyntax(
+            definitionIndex: context.definitions[definition]!,
+            uses: instancesForDefinition
+                .map((instance) => instance.toSyntax(context))
+                .toList(),
+          ),
+        );
+      }
     }
+
+    final uses = (callRecordings.isEmpty && instanceRecordings.isEmpty)
+        ? null
+        : UsesSyntax(
+            staticCalls: callRecordings.isEmpty ? null : callRecordings,
+            instances: instanceRecordings.isEmpty ? null : instanceRecordings,
+          );
 
     return RecordedUsesSyntax(
       metadata: metadata.toSyntax(),
       constants: constantSyntax.isEmpty ? null : constantSyntax,
+      loadingUnits: allLoadingUnits.isEmpty
+          ? null
+          : allLoadingUnits
+                .map((unit) => LoadingUnitSyntax(name: unit.name))
+                .toList(),
       definitions: context.definitions.isEmpty
           ? null
           : context.definitions.keys
@@ -181,64 +236,75 @@ Error: $e
                   (definition) => definition.toSyntax(),
                 )
                 .toList(),
-      recordings: recordings.isEmpty ? null : recordings,
+      uses: uses,
     );
   }
 
-  List<Constant> _collectConstants() => {
+  Iterable<MaybeConstant> _collectConstants() {
+    final values = <MaybeConstant>{
+      ...calls.values
+          .expand((calls) => calls)
+          .expand(
+            (call) => [
+              if (call.receiver != null) call.receiver!,
+              if (call is CallWithArguments) ...[
+                ...call.positionalArguments,
+                ...call.namedArguments.values,
+              ],
+            ],
+          ),
+      ...instances.values
+          .expand((instances) => instances)
+          .expand(
+            (instance) => switch (instance) {
+              InstanceConstantReference(:final instanceConstant) => {
+                ...instanceConstant.fields.values,
+                instanceConstant,
+              },
+              InstanceCreationReference(
+                :final positionalArguments,
+                :final namedArguments,
+              ) =>
+                [...positionalArguments, ...namedArguments.values],
+              ConstructorTearoffReference() => <MaybeConstant>[],
+            },
+          ),
+    };
+    return values.flatten();
+  }
+
+  Iterable<LoadingUnit> _collectLoadingUnits() => {
     ...calls.values
         .expand((calls) => calls)
-        .whereType<CallWithArguments>()
-        .expand(
-          (call) => [
-            ...call.positionalArguments,
-            ...call.namedArguments.values,
-          ],
-        )
-        .expand(
-          (argument) => switch (argument) {
-            final Constant c => [c],
-            NonConstant() => <Constant>[],
-          },
-        ),
+        .expand((call) => call.loadingUnits),
     ...instances.values
         .expand((instances) => instances)
-        .expand(
-          (instance) => switch (instance) {
-            InstanceConstantReference(:final instanceConstant) => {
-              ...instanceConstant.fields.values,
-              instanceConstant,
-            },
-            InstanceCreationReference(
-              :final positionalArguments,
-              :final namedArguments,
-            ) =>
-              [...positionalArguments, ...namedArguments.values].expand(
-                (argument) => switch (argument) {
-                  final Constant c => [c],
-                  NonConstant() => <Constant>[],
-                },
-              ),
-            ConstructorTearoffReference() => <Constant>[],
-          },
-        ),
-  }.flatten().toList();
+        .expand((instance) => instance.loadingUnits),
+  };
+
+  LoadingUnitSerializationContext _serializeLoadingUnits(
+    Iterable<LoadingUnit> allLoadingUnits,
+  ) => LoadingUnitSerializationContext(
+    allLoadingUnits.asMapToIndices,
+  );
 
   DefinitionSerializationContext _serializeDefinitions(
-    List<Constant> allConstants,
+    Iterable<MaybeConstant> allConstants,
+    LoadingUnitSerializationContext loadingUnitContext,
   ) {
     final allDefinitions = {
       ...calls.keys,
       ...instances.keys,
       ...allConstants.whereType<InstanceConstant>().map((c) => c.definition),
-    }.toList();
-    return DefinitionSerializationContext(
+    };
+    return DefinitionSerializationContext.fromPrevious(
+      loadingUnitContext,
       allDefinitions.asMapToIndices,
     );
   }
 
   (SerializationContext, List<ConstantSyntax>) _serializeConstants(
-    List<Constant> allConstants,
+    Iterable<MaybeConstant> allConstants,
     DefinitionSerializationContext definitionContext,
   ) {
     final constantsMap = allConstants.asMapToIndices;
@@ -494,23 +560,24 @@ Error: $e
   }
 }
 
-extension FlattenConstantsExtension on Iterable<Constant> {
-  Set<Constant> flatten() {
-    final constants = <Constant>{};
+extension FlattenConstantsExtension on Iterable<MaybeConstant> {
+  Set<MaybeConstant> flatten() {
+    final constants = <MaybeConstant>{};
     for (final constant in this) {
       depthFirstSearch(constant, constants);
     }
     return constants;
   }
 
-  void depthFirstSearch(Constant constant, Set<Constant> collected) {
-    final children = switch (constant) {
+  void depthFirstSearch(MaybeConstant constant, Set<MaybeConstant> collected) {
+    // ignore: omit_local_variable_types
+    final Iterable<MaybeConstant> children = switch (constant) {
       ListConstant() => constant.value,
       MapConstant() => constant.entries.expand(
         (e) => [e.key, e.value],
       ),
       InstanceConstant() => constant.fields.values,
-      _ => <Constant>[],
+      _ => <MaybeConstant>[],
     };
     for (final child in children) {
       if (!collected.contains(child)) {
